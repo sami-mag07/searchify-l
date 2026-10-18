@@ -32,7 +32,12 @@ rerank = ["sentence-transformers>=3.0"]
 browser = ["playwright>=1.44"]
 stealth = ["camoufox>=0.4"]
 api = ["fastapi>=0.110", "uvicorn>=0.29", "pydantic>=2.6"]
+mcp = ["mcp>=2.3"]
 dev = ["pytest>=8.0"]
+
+[project.scripts]
+searchify = "searchify.cli:main"
+searchify-mcp = "searchify.mcp_server:main"
 
 [project.urls]
 Homepage = "https://github.com/sami-mag07/searchify-l"

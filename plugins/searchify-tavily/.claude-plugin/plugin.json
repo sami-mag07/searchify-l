@@ -1,0 +1,9 @@
+{
+  "name": "searchify-tavily",
+  "version": "0.2.0",
+  "description": "Searchify for Tavily: Tavily searches and extracts, Searchify ranks passages locally and steps in when Tavily is slow.",
+  "author": { "name": "Sami Magdouli and Malek Hassan" },
+  "repository": "https://github.com/sami-mag07/searchify-l",
+  "license": "MIT",
+  "keywords": ["search", "research", "mcp"]
+}

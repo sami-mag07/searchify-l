@@ -1,0 +1,9 @@
+{
+  "name": "searchify",
+  "version": "0.2.0",
+  "description": "Searchify on its own: keyless web search, page reading and passage ranking on your machine.",
+  "author": { "name": "Sami Magdouli and Malek Hassan" },
+  "repository": "https://github.com/sami-mag07/searchify-l",
+  "license": "MIT",
+  "keywords": ["search", "research", "mcp"]
+}

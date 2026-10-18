@@ -1,0 +1,9 @@
+{
+  "mcpServers": {
+    "searchify-tavily": {
+      "command": "uvx",
+      "args": ["--from", "searchify[mcp,rerank] @ git+https://github.com/sami-mag07/searchify-l@tavily-edition", "searchify-mcp"],
+      "env": { "TAVILY_API_KEY": "${TAVILY_API_KEY}" }
+    }
+  }
+}
