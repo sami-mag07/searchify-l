@@ -40,13 +40,16 @@ TOOLS = [
 ]
 
 
+AS_OF = os.environ.get("SEARCHIFY_AS_OF", "")  # YYYY-MM-DD: replay a research as if it were that day
+
+
 def _run_tool(name: str, args: Dict) -> Dict:
     if name == "research":
         out = complement.research(str(args.get("question", "")), top_k=5)
         return {"passages": [{"content": p["content"][:900], "url": p["url"]} for p in out["passages"]],
                 "timing": out["timing"]}
     if name == "search":
-        hits, info = complement.search(str(args.get("query", "")), 8)
+        hits, info = complement.search(str(args.get("query", "")), 8, **({"end_date": AS_OF} if AS_OF else {}))
         return {"results": [{"title": h["title"], "url": h["url"], "content": h["content"][:300]} for h in hits],
                 "timing": info}
     if name == "read":
@@ -69,7 +72,8 @@ def ask(question: str, base_url: str, model: str, api_key: str = "local", max_st
         log: Callable[[str], None] = lambda _: None) -> Dict:
     """Run the tool loop; returns the final answer, the tool calls made and the time taken."""
     t0 = time.perf_counter()
-    messages: List[Dict] = [{"role": "system", "content": SYSTEM}, {"role": "user", "content": question}]
+    system = SYSTEM + (f" Today is {AS_OF}; treat anything after that date as unknown." if AS_OF else "")
+    messages: List[Dict] = [{"role": "system", "content": system}, {"role": "user", "content": question}]
     calls = []
     for _ in range(max_steps):
         msg = _chat(base_url, model, messages, api_key)["choices"][0]["message"]
@@ -97,7 +101,17 @@ def ask(question: str, base_url: str, model: str, api_key: str = "local", max_st
             result = _run_tool(name, args)
             calls.append({"tool": name, "args": args, "timing": result.get("timing")})
             messages.append({"role": "tool", "tool_call_id": tc.get("id", name), "content": json.dumps(result, ensure_ascii=False)})
-    return {"answer": "", "tool_calls": calls, "seconds": round(time.perf_counter() - t0, 1), "note": "step limit reached"}
+    # Step budget used up: one last turn without tools, so the model answers from what it found.
+    messages.append({"role": "user", "content": "No tool calls left. Give your final answer now from what you found, citing the URLs."})
+    body = json.dumps({"model": model, "messages": messages, "temperature": 0}).encode()
+    req = urllib.request.Request(base_url.rstrip("/") + "/chat/completions", data=body,
+                                 headers={"Content-Type": "application/json", "Authorization": f"Bearer {api_key}"})
+    with urllib.request.urlopen(req, timeout=600) as r:
+        msg = json.load(r)["choices"][0]["message"]
+    answer = re.sub(r"<think>.*?</think>", "", msg.get("content") or "", flags=re.S).strip() \
+        or (msg.get("reasoning_content") or "").strip()[-1500:]
+    return {"answer": answer, "tool_calls": calls, "seconds": round(time.perf_counter() - t0, 1),
+            "mode": "searchify + tavily" if complement.has_tavily() else "searchify", "note": "answered after the step limit"}
 
 
 def default_base_url() -> str:

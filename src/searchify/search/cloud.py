@@ -105,6 +105,7 @@ def tavily_search(
     time_range: Optional[str] = None,
     include_domains: Optional[List[str]] = None,
     exclude_domains: Optional[List[str]] = None,
+    end_date: Optional[str] = None,
     **_: object,
 ) -> List[Dict[str, str]]:
     """Tavily search, the last safety net (TAVILY_API_KEY from the environment)."""
@@ -115,6 +116,8 @@ def tavily_search(
     }
     if time_range in ("day", "week", "month", "year"):
         body["time_range"] = time_range
+    if end_date:  # YYYY-MM-DD: only pages Tavily dates on or before this day (replaying an older research)
+        body["end_date"] = end_date
     if include_domains:
         body["include_domains"] = include_domains
     if exclude_domains:

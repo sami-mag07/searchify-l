@@ -20,6 +20,7 @@ Environment:
 from __future__ import annotations
 
 import os
+import threading
 import time
 from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
 from typing import Callable, Dict, List, Optional, Tuple
@@ -31,6 +32,7 @@ from .search._common import SearchBackendError
 from .search.cloud import tavily_post, tavily_search
 
 _POOL = ThreadPoolExecutor(max_workers=8, thread_name_prefix="searchify-complement")
+_RANK_LOCK = threading.Lock()  # the ranking model is not safe to call from several threads at once (MPS crashes)
 
 
 def _budget(name: str, default: float) -> float:
@@ -85,6 +87,7 @@ def _race(primary: Callable[[], List], backup: Callable[[], List], budget: float
 
 
 def _local_search(query: str, max_results: int, **filters) -> List[Dict[str, str]]:
+    filters.pop("end_date", None)  # date limits are a Tavily feature; the local backends don't take them
     for name in _chain():
         if name == "tavily":
             continue
@@ -133,15 +136,19 @@ def extract(urls: List[str], fmt: str = "markdown") -> Tuple[List[Dict], Dict]:
     return docs, {"extract_by": side, "extract_s": round(took, 2)}
 
 
-def research(question: str, max_results: int = 8, read: int = 5, top_k: int = 5) -> Dict:
+def research(question: str, max_results: int = 8, read: int = 5, top_k: int = 5, **filters) -> Dict:
     """Search, read the top pages, rank every passage on this machine, return the best per source."""
     from .rerank import rerank  # optional extra: searchify[rerank]
-    hits, s_info = search(question, max_results)
+    as_of = os.environ.get("SEARCHIFY_AS_OF")
+    if as_of and "end_date" not in filters:
+        filters["end_date"] = as_of
+    hits, s_info = search(question, max_results, **filters)
     docs, e_info = extract([h["url"] for h in hits[:read]]) if hits else ([], {"extract_by": "none", "extract_s": 0})
     passages = [{"content": p, "url": d["url"], "title": d.get("title", "")}
                 for d in docs for p in (d.get("content") or "").split("\n") if len(p.split()) >= 12]
     t0 = time.perf_counter()
-    ranked = rerank(question, passages) if passages else []
+    with _RANK_LOCK:
+        ranked = rerank(question, passages) if passages else []
     rank_s = time.perf_counter() - t0
     best, seen = [], set()
     for p in ranked:  # one passage per source
