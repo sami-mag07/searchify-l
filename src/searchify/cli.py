@@ -26,8 +26,30 @@ def main() -> None:
     s.add_argument("--max-results", type=int, default=8)
     x = sub.add_parser("read", help="clean text of web pages")
     x.add_argument("urls", nargs="+")
+    for name, helptext in (("ask", "answer a question with any model, using Searchify's tools"),
+                           ("chat", "chatbot in the terminal with any model, using Searchify's tools")):
+        c = sub.add_parser(name, help=helptext)
+        if name == "ask":
+            c.add_argument("question")
+        c.add_argument("--preset", default="", help="a tested model, e.g. deepseek-v4-flash or ollama:qwen3 (see `searchify models`)")
+        c.add_argument("--base-url", default="", help="any OpenAI-compatible server, e.g. http://localhost:11434/v1")
+        c.add_argument("--model", default="")
+    sub.add_parser("models", help="list the model presets")
     o = ap.parse_args()
-    if o.cmd == "research":
+    if o.cmd == "models":
+        from .agent import PRESETS
+        for k, (url, mid, key, note) in PRESETS.items():
+            print(f"{k:28s} {mid:42s} {('needs ' + key) if key else 'local'} · {note}")
+        return
+    if o.cmd in ("ask", "chat"):
+        from . import agent
+        target = agent.resolve(o.preset, o.base_url, o.model)
+        if o.cmd == "chat":
+            agent.chat(target)
+            return
+        out = agent.ask(o.question, target["base_url"], target["model"], target["api_key"],
+                        log=lambda s: print(f"  · {s}", file=sys.stderr))
+    elif o.cmd == "research":
         out = complement.research(o.question, top_k=o.top_k)
     elif o.cmd == "search":
         hits, info = complement.search(o.query, o.max_results)
